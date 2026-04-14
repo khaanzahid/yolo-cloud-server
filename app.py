@@ -5,20 +5,26 @@ import cv2
 
 app = Flask(__name__)
 
-# 🔥 Lazy load model (fixes 502 crash)
+# 🔥 Lazy loading (prevents 502 crash)
 model = None
 
-# Home route
+# =========================
+# HOME ROUTE
+# =========================
 @app.route('/')
 def home():
     return "YOLO Server Running"
 
-# Detection route
+# =========================
+# DETECTION ROUTE
+# =========================
 @app.route('/detect', methods=['POST'])
 def detect():
     global model
 
     try:
+        print("---- New Request ----")
+
         # 🔥 Load model only when needed
         if model is None:
             print("Loading YOLO model...")
@@ -27,13 +33,23 @@ def detect():
         # 📸 Get raw image from ESP32
         img_bytes = request.data
 
+        if len(img_bytes) == 0:
+            print("Empty image received!")
+            return "Empty Image", 400
+
+        print("Image size:", len(img_bytes))
+
+        # 🔄 Convert to OpenCV image
         img_array = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
         if frame is None:
-            return "Invalid Image", 400
+            print("Image decode failed!")
+            return "Decode Failed", 400
 
-        # 🧠 Run YOLO
+        print("Image decoded successfully")
+
+        # 🧠 YOLO Detection
         results = model(frame)
 
         detected_objects = []
@@ -49,8 +65,11 @@ def detect():
         return jsonify({"objects": detected_objects})
 
     except Exception as e:
-        print("Error:", e)
+        print("🔥 FULL ERROR:", str(e))
         return "Server Error", 500
 
-# Run server
-app.run(host='0.0.0.0', port=5000)
+# =========================
+# RUN SERVER
+# =========================
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000)
