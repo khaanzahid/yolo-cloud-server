@@ -5,32 +5,47 @@ import cv2
 
 app = Flask(__name__)
 
+# Load YOLO model (runs once)
 model = YOLO("yolov8n.pt")
 
+# Home route (for testing)
 @app.route('/')
 def home():
     return "YOLO Server Running"
 
+# Detection route
 @app.route('/detect', methods=['POST'])
 def detect():
-    file = request.files['image']
+    try:
+        # 🔥 Get raw image data from ESP32
+        img_bytes = request.data
 
-    img_bytes = file.read()
-    img_array = np.frombuffer(img_bytes, np.uint8)
-    frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        # Convert to image
+        img_array = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
-    results = model(frame)
+        # Check if image is valid
+        if frame is None:
+            return "Invalid Image", 400
 
-    detected_objects = []
+        # Run YOLO detection
+        results = model(frame)
 
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])
-            label = model.names[cls]
-            detected_objects.append(label)
+        detected_objects = []
 
-    print("Detected:", detected_objects)
+        for r in results:
+            for box in r.boxes:
+                cls = int(box.cls[0])
+                label = model.names[cls]
+                detected_objects.append(label)
 
-    return jsonify({"objects": detected_objects})
+        print("Detected:", detected_objects)
 
+        return jsonify({"objects": detected_objects})
+
+    except Exception as e:
+        print("Error:", e)
+        return "Server Error", 500
+
+# Run server
 app.run(host='0.0.0.0', port=5000)
